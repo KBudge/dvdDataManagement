@@ -1,0 +1,132 @@
+--B.  Provide original code for function(s) in text format that perform a transformation.
+
+--Convert timestamp to the numerical year
+CREATE OR REPLACE FUNCTION rental_year_int(rental_date TIMESTAMP)
+  RETURNS int
+  LANGUAGE plpgsql
+AS
+$$
+DECLARE year_int int;
+BEGIN
+  SELECT EXTRACT(YEAR FROM rental_date) INTO year_int;
+  RETURN year_int;
+END;
+$$;
+
+--Check if the function will extract the year from a date
+SELECT rental_year_int('2019-07-26');
+
+
+--C.  Provide original SQL code in a text format that creates the detailed and summary tables to hold your report table sections.
+
+--Create rental_category table
+DROP TABLE IF EXISTS rental_category;
+CREATE TABLE rental_category (
+  inventory_id INT,
+  film_name VARCHAR,
+  rental_rate MONEY,
+  rental_date TIMESTAMP,
+  category VARCHAR
+);
+
+--Create rental_category_summary table
+DROP TABLE IF EXISTS rental_category_summary;
+CREATE TABLE rental_category_summary (
+  rental_year INT,
+  category VARCHAR,
+  revenue_generated MONEY
+);
+
+--See if both tables were created and are empty
+SELECT * FROM rental_category;
+SELECT * FROM rental_category_summary;
+
+
+--E.  Provide original SQL code in a text format that creates a trigger on the detailed table of the report that will continually update the summary table as data is added to the detailed table.
+
+CREATE OR REPLACE FUNCTION insert_trigger_function()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+DELETE FROM rental_category_summary;
+INSERT INTO rental_category_summary
+SELECT rental_year_int(rental_date), category, SUM(rental_rate)::money
+FROM rental_category
+GROUP BY rental_year_int(rental_date), category
+ORDER BY rental_year_int(rental_date) DESC, SUM(rental_rate) DESC;
+RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER new_rental
+  AFTER INSERT
+  ON rental_category
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE insert_trigger_function();
+
+ 
+--D.  Provide an original SQL query in a text format that will extract the raw data needed for the detailed section of your report from the source database.
+
+INSERT INTO rental_category
+SELECT
+  r.inventory_id,
+  f.title,
+  f.rental_rate::money,
+  r.rental_date,
+  cat.name
+FROM rental AS r
+LEFT JOIN inventory AS i ON r.inventory_id=i.inventory_id
+LEFT JOIN film AS f on i.film_id=f.film_id
+LEFT JOIN film_category AS fc ON i.film_id=fc.film_id
+LEFT JOIN category AS cat ON fc.category_id=cat.category_id;
+
+
+--Check if rental_category table is populated
+SELECT * FROM rental_category;
+--Check to see if trigger worked correctly to populate rental_category_summary
+SELECT * FROM rental_category_summary;
+
+
+--F.  Provide an original stored procedure in a text format that can be used to refresh the data in both the detailed table and summary table. The procedure should clear the contents of the detailed table and summary table and perform the raw data extraction from part D.
+
+CREATE OR REPLACE PROCEDURE refresh_report_tables()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+DELETE FROM rental_category;
+INSERT INTO rental_category
+SELECT
+  r.inventory_id,
+  f.title AS film_name,
+  f.rental_rate::money,
+  r.rental_date,
+  cat.name
+FROM rental AS r
+LEFT JOIN inventory AS i ON r.inventory_id=i.inventory_id
+LEFT JOIN film AS f on i.film_id=f.film_id
+LEFT JOIN film_category AS fc ON i.film_id=fc.film_id
+LEFT JOIN category AS cat ON fc.category_id=cat.category_id;
+RETURN;
+END;
+$$;
+
+--Sort the rental_category table by the inventory_id *note id starts with 1*
+SELECT * FROM rental_category ORDER BY inventory_id;
+--Check that the rental sum for both of the report tables is the same ($47,211.56)
+SELECT SUM(rental_rate) FROM rental_category;
+SELECT SUM(revenue_generated) FROM rental_category_summary;
+--Add new film to rental_category table
+INSERT INTO rental_category VALUES (0, 'Kami',10.44, '06-26-2024 19:43:24','Comedy');
+--Check that the inserted film is in the rental_category table *note it's id is 0*
+SELECT * FROM rental_category ORDER BY inventory_id;
+--Check that the rental sum is the same for both report tables ($47,222.00)
+SELECT SUM(rental_rate) FROM rental_category;
+SELECT SUM(revenue_generated) FROM rental_category_summary;
+--Call the procedure to reset the tables
+CALL refresh_report_tables();
+--Check that the inserted film is gone from the detailed table
+SELECT * FROM rental_category ORDER BY inventory_id;
+--Check that the Sums of both tables are back to the original sum
+SELECT SUM(rental_rate) FROM rental_category;
+SELECT SUM(revenue_generated) FROM rental_category_summary;
