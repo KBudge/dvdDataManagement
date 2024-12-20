@@ -1,4 +1,4 @@
-<h1>JWipe - Disk Sanitization</h1>
+<h1>DVD Data Management</h1>
 
  ### [YouTube Demonstration](https://youtu.be/7eJexJVCqJo)
 
@@ -9,8 +9,8 @@ Project consists of a simple PowerShell script that walks the user through "zero
 
 <h2>Languages and Utilities Used</h2>
 
-- <b>PowerShell</b> 
-- <b>Diskpart</b>
+- <b>SQL</b> 
+- <b>PostgreSQL</b>
 
 <h2>Environments Used </h2>
 
